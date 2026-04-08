@@ -1,0 +1,23 @@
+[project]
+name = "weixin-py-migrated"
+version = "0.1.0"
+description = "Python migration for core Weixin bot flows"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+    "qrcode>=8.2",
+]
+
+[project.scripts]
+weixin-daemon = "weixin_bot.daemon:run"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["weixin_bot*"]
