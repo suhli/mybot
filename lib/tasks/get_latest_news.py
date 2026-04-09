@@ -145,6 +145,7 @@ def run_get_latest_news() -> Path:
     history_keys = _collect_history_keys(ws_news_dir=ws_news_dir, today=today)
 
     new_items: list[dict[str, Any]] = []
+    new_items_by_source: dict[str, list[dict[str, Any]]] = {}
     for source_id, payload in all_results.items():
         if not isinstance(payload, dict):
             continue
@@ -156,16 +157,22 @@ def run_get_latest_news() -> Path:
                 continue
             key = _item_key(source_id, item)
             if key not in history_keys:
-                new_items.append(
-                    {
-                        "source_id": source_id,
-                        "id": item.get("id"),
-                        "title": item.get("title"),
-                        "url": item.get("url"),
-                        "mobileUrl": item.get("mobileUrl"),
-                        "pubDate": item.get("pubDate"),
-                    }
-                )
+                normalized_item = {
+                    "source_id": source_id,
+                    "id": item.get("id"),
+                    "title": item.get("title"),
+                    "url": item.get("url"),
+                    "mobileUrl": item.get("mobileUrl"),
+                    "pubDate": item.get("pubDate"),
+                }
+                new_items.append(normalized_item)
+                if source_id not in new_items_by_source:
+                    new_items_by_source[source_id] = []
+                new_items_by_source[source_id].append(normalized_item)
+
+    new_count_by_source = {
+        source_id: len(items) for source_id, items in new_items_by_source.items()
+    }
 
     output = {
         "generated_at": now.isoformat(timespec="seconds"),
@@ -174,6 +181,8 @@ def run_get_latest_news() -> Path:
         "success_count": len(all_results),
         "error_count": len(errors),
         "new_count_vs_before_today": len(new_items),
+        "new_count_by_source": new_count_by_source,
+        "new_items_by_source": new_items_by_source,
         "errors": errors,
         "new_items": new_items,
         "results": all_results,
