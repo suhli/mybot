@@ -47,6 +47,14 @@ print(path)
   - `new_items`
   - `errors`
 
+## 结果产出位置
+
+- 原始抓取结果（JSON）保存到：
+  - `ws/news/yyyy-mm-dd/hh_mm_ss.json`
+- `run_get_latest_news()` 的返回值就是本次生成的 JSON 文件路径。
+- 若需要“最新一份结果”，应在 `ws/news` 下按文件修改时间取最新 `.json`。
+- 本 skill 的“总结文本”默认输出到当前对话回复（或控制台标准输出）；除非用户明确要求，不额外落盘文本文件。
+
 ## 输出模板（中文）
 
 ```text
