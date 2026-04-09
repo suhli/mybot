@@ -24,7 +24,7 @@ uv run weixin-daemon
 在你的业务代码里（同一个 Python 进程），直接使用：
 
 ```python
-from weixin_bot.daemon import PersonalWeixinDaemon
+from lib.weixin_bot.daemon import PersonalWeixinDaemon
 
 daemon = PersonalWeixinDaemon()
 

@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-weixin-daemon = "weixin_bot.daemon:run"
+weixin-daemon = "lib.weixin_bot.daemon:run"
 
 [tool.uv]
 package = true
@@ -20,4 +20,4 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["weixin_bot*"]
+include = ["lib*"]
