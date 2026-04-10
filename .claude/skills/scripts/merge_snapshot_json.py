@@ -50,6 +50,36 @@ def _resolve_target_dir(dir_arg: str, latest_day_arg: str) -> Path | None:
     return None
 
 
+def _iter_source_items(raw: dict[str, Any]) -> list[tuple[str, list[dict[str, Any]]]]:
+    """
+    从快照中提取“按来源分组的条目列表”。
+    兼容 news / hot-news 的常见字段。
+    """
+    candidate_keys = (
+        "new_items_by_source",
+        "hot_items_by_source",
+        "new_hot_items_by_source",
+        "items_by_source",
+    )
+    for key in candidate_keys:
+        value = raw.get(key)
+        if not isinstance(value, dict):
+            continue
+        out: list[tuple[str, list[dict[str, Any]]]] = []
+        for source_id, items in value.items():
+            if not isinstance(source_id, str) or not isinstance(items, list):
+                continue
+            typed_items = [it for it in items if isinstance(it, dict)]
+            out.append((source_id, typed_items))
+        if out:
+            return out
+    return []
+
+
+def _normalize_title(title: str) -> str:
+    return " ".join(title.split()).strip()
+
+
 def main() -> int:
     args = _parse_args()
     target_dir = _resolve_target_dir(args.dir, args.latest_day)
@@ -68,7 +98,10 @@ def main() -> int:
         print(json.dumps({"ok": False, "error": f"invalid dir: {target_dir}"}, ensure_ascii=False))
         return 1
 
-    files = sorted(target_dir.glob("*.json"))
+    output_path = Path(args.output) if args.output else target_dir / "merged.json"
+    files = sorted(
+        file for file in target_dir.glob("*.json") if file.resolve() != output_path.resolve()
+    )
     if not files:
         print(json.dumps({"ok": False, "error": f"no json files in: {target_dir}"}, ensure_ascii=False))
         return 1
@@ -79,6 +112,8 @@ def main() -> int:
     total_new = 0
     total_new_hot = 0
     merged_errors: dict[str, dict[str, str]] = {}
+    title_index: dict[str, dict[str, Any]] = {}
+    title_empty_count = 0
 
     for file in files:
         try:
@@ -107,6 +142,28 @@ def main() -> int:
                 str(k): str(v) for k, v in file_errors.items()
             }
 
+        source_items = _iter_source_items(raw)
+        for source_id, items in source_items:
+            for item in items:
+                title_raw = item.get("title")
+                if not isinstance(title_raw, str):
+                    continue
+                title = _normalize_title(title_raw)
+                if not title:
+                    title_empty_count += 1
+                    continue
+                url = item.get("url")
+                url_text = url if isinstance(url, str) else ""
+                key = title.lower()
+                bucket = title_index.setdefault(
+                    key,
+                    {
+                        "title": title,
+                        "sources": set(),
+                    },
+                )
+                bucket["sources"].add(source_id)
+
         records.append(
             {
                 "file": file.name,
@@ -119,6 +176,16 @@ def main() -> int:
             }
         )
 
+    titles_merged: list[dict[str, Any]] = []
+    for item in title_index.values():
+        titles_merged.append(
+            {
+                "title": item["title"],
+                "sources": sorted(item["sources"]),
+            }
+        )
+    titles_merged.sort(key=lambda x: str(x["title"]))
+
     output = {
         "merged_at": datetime.now().isoformat(timespec="seconds"),
         "target_dir": str(target_dir),
@@ -129,12 +196,14 @@ def main() -> int:
             "total_error_count": total_error,
             "total_new_count_vs_before_today": total_new,
             "total_new_hot_count_vs_today_before": total_new_hot,
+            "total_unique_titles": len(titles_merged),
+            "empty_title_count": title_empty_count,
         },
         "records": records,
+        "titles_merged": titles_merged,
         "errors_by_file": merged_errors,
     }
 
-    output_path = Path(args.output) if args.output else target_dir / "merged.json"
     output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
     print(str(output_path))
     return 0
