@@ -2,7 +2,7 @@
 name: newsnow-hot-summary
 description: >-
   执行 `run_get_hot_news`，在 `ws/hot-news` 下定位最新快照 JSON，并输出简明中文热文摘要（生成时间、成功/失败数、
-  各来源热文数量、热文标题与链接、失败来源 ID）。
+  各来源热文数量、相对今日目录已生成快照的新增热文数量、热文标题与链接、失败来源 ID）。
   在用户要 NewsNow 热文汇总、本轮热榜简报、或基于仓库已抓取热文的快速文字总结时使用。
 ---
 
@@ -29,6 +29,7 @@ description: >-
    - 生成时间
    - 成功数 / 失败数
    - 按来源分组的热文数量（优先使用 `hot_count_by_source`）
+   - `new_hot_count_vs_today_before`（语义：相对今日目录已生成快照的新增热文）
    - 每个来源列出最多 3 条热文（`title + url`）
    - 若存在错误，列出失败来源 ID
 
@@ -51,7 +52,23 @@ print(path)
   - `hot_items_per_source_limit`
   - `hot_count_by_source`
   - `hot_items_by_source`
+  - `new_hot_count_vs_today_before`
+  - `new_hot_count_by_source`
+  - `new_hot_items_by_source`
+  - `new_hot_items`
   - `errors`
+
+- 如需“合并当天目录下所有快照”再总结，可执行脚本（两种方式）：
+
+```bash
+# 指定某天目录
+python .claude/skills/scripts/merge_snapshot_json.py --dir ws/hot-news/yyyy-mm-dd
+
+# 自动选择最新日期目录
+python .claude/skills/scripts/merge_snapshot_json.py --latest-day ws/hot-news
+```
+
+脚本会输出合并后的 `merged.json` 路径；默认写到目标目录下。
 
 ## 结果产出位置
 
@@ -66,6 +83,7 @@ print(path)
 ```text
 热文快照时间: <generated_at>
 抓取结果: 成功 <success_count>，失败 <error_count>
+相对今日目录已生成快照新增热文: <new_hot_count_vs_today_before>
 
 按来源热文:
 - <source_id>: <count> 条
@@ -82,6 +100,7 @@ print(path)
 
 - 优先使用本次执行后最新生成的 JSON 文件。
 - 如果 `hot_items_by_source` 为空，需要明确说明“当前未抓取到可展示热文”。
+- 如果 `new_hot_items` 为空，需要明确说明“未发现相对今日已生成快照的新增热文”。
 - 摘要时优先按来源组织，不要只给混合列表。
 - 摘要保持简洁、清晰、可读。
 

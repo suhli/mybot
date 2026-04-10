@@ -2,7 +2,7 @@
 name: newsnow-latest-summary
 description: >-
   执行 `run_get_latest_news`，在 `ws/news` 下定位最新快照 JSON，并输出简明中文摘要（生成时间、成功/失败数、
-  `new_count_vs_before_today`、按来源的新增标题与链接、失败来源 ID）。
+  相对今日目录已生成快照的新增数、按来源的新增标题与链接、失败来源 ID）。
   在用户要 NewsNow 快照摘要、本轮抓取简报、或基于仓库已抓取新闻的快速文字汇总时使用。
 ---
 
@@ -28,7 +28,7 @@ description: >-
 4. 输出中文摘要，至少包含：
    - 生成时间
    - 成功数 / 失败数
-   - `new_count_vs_before_today`
+   - `new_count_vs_before_today`（语义：相对今日目录已生成快照的新增）
    - 按来源分组的新增数量（优先使用 `new_count_by_source`）
    - 每个来源列出最多 3 条新增（`title + url`）
    - 若存在错误，列出失败来源 ID
@@ -49,11 +49,23 @@ print(path)
   - `generated_at`
   - `success_count`
   - `error_count`
-  - `new_count_vs_before_today`
+  - `new_count_vs_before_today`（相对今日目录已生成快照）
   - `new_count_by_source`
   - `new_items_by_source`
   - `new_items`
   - `errors`
+
+- 如需“合并当天目录下所有快照”再总结，可执行脚本（两种方式）：
+
+```bash
+# 指定某天目录
+python .claude/skills/scripts/merge_snapshot_json.py --dir ws/news/yyyy-mm-dd
+
+# 自动选择最新日期目录
+python .claude/skills/scripts/merge_snapshot_json.py --latest-day ws/news
+```
+
+脚本会输出合并后的 `merged.json` 路径；默认写到目标目录下。
 
 ## 结果产出位置
 
@@ -68,7 +80,7 @@ print(path)
 ```text
 新闻快照时间: <generated_at>
 抓取结果: 成功 <success_count>，失败 <error_count>
-相对今天之前新增: <new_count_vs_before_today>
+相对今日目录已生成快照新增: <new_count_vs_before_today>
 
 按来源新增:
 - <source_id>: <count> 条
@@ -84,7 +96,7 @@ print(path)
 ## 注意事项
 
 - 优先使用本次执行后最新生成的 JSON 文件。
-- 如果 `new_items` 为空，需要明确说明“未发现相对历史的新增新闻”。
+- 如果 `new_items` 为空，需要明确说明“未发现相对今日已生成快照的新增新闻”。
 - 摘要时优先按来源组织，不要只给混合列表。
 - 摘要保持简洁、清晰、可读。
 

@@ -15,6 +15,13 @@ logger = logging.getLogger(__name__)
 HOT_ITEMS_PER_SOURCE = 10
 
 
+def _item_key(source_id: str, item: dict[str, Any]) -> str:
+    item_id = str(item.get("id", "") or "")
+    url = str(item.get("url", "") or "")
+    title = str(item.get("title", "") or "")
+    return f"{source_id}::{item_id}::{url}::{title}"
+
+
 def _normalize_item(source_id: str, item: dict[str, Any]) -> dict[str, Any]:
     return {
         "source_id": source_id,
@@ -24,6 +31,47 @@ def _normalize_item(source_id: str, item: dict[str, Any]) -> dict[str, Any]:
         "mobileUrl": item.get("mobileUrl"),
         "pubDate": item.get("pubDate"),
     }
+
+
+def _collect_history_keys_today_before(out_dir: Path, out_file: Path) -> set[str]:
+    keys: set[str] = set()
+    if not out_dir.exists():
+        return keys
+
+    for snapshot_file in out_dir.glob("*.json"):
+        if snapshot_file.name >= out_file.name:
+            continue
+        try:
+            raw = json.loads(snapshot_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(raw, dict):
+            continue
+        # 兼容历史字段：优先 hot_items_by_source，其次 results.items
+        hot_items_by_source = raw.get("hot_items_by_source")
+        if isinstance(hot_items_by_source, dict):
+            for source_id, items in hot_items_by_source.items():
+                if not isinstance(source_id, str) or not isinstance(items, list):
+                    continue
+                for item in items:
+                    if isinstance(item, dict):
+                        keys.add(_item_key(source_id, item))
+            continue
+
+        results = raw.get("results", {})
+        if not isinstance(results, dict):
+            continue
+        for source_id, payload in results.items():
+            if not isinstance(source_id, str) or not isinstance(payload, dict):
+                continue
+            items = payload.get("items", [])
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if isinstance(item, dict):
+                    keys.add(_item_key(source_id, item))
+    return keys
 
 
 def run_get_hot_news() -> Path:
@@ -75,6 +123,16 @@ def run_get_hot_news() -> Path:
     hot_count_by_source = {
         source_id: len(items) for source_id, items in hot_items_by_source.items()
     }
+    history_keys = _collect_history_keys_today_before(out_dir=out_dir, out_file=out_file)
+    new_hot_items_by_source: dict[str, list[dict[str, Any]]] = {}
+    for source_id, items in hot_items_by_source.items():
+        new_items = [item for item in items if _item_key(source_id, item) not in history_keys]
+        if new_items:
+            new_hot_items_by_source[source_id] = new_items
+    new_hot_count_by_source = {
+        source_id: len(items) for source_id, items in new_hot_items_by_source.items()
+    }
+    new_hot_items = [item for items in new_hot_items_by_source.values() for item in items]
 
     output = {
         "generated_at": now.isoformat(timespec="seconds"),
@@ -85,6 +143,10 @@ def run_get_hot_news() -> Path:
         "hot_items_per_source_limit": HOT_ITEMS_PER_SOURCE,
         "hot_count_by_source": hot_count_by_source,
         "hot_items_by_source": hot_items_by_source,
+        "new_hot_count_vs_today_before": len(new_hot_items),
+        "new_hot_count_by_source": new_hot_count_by_source,
+        "new_hot_items_by_source": new_hot_items_by_source,
+        "new_hot_items": new_hot_items,
         "errors": errors,
         "results": all_results,
     }
@@ -97,5 +159,6 @@ def run_get_hot_news() -> Path:
         for source_id, err_code in sorted(errors.items()):
             logger.warning("  %s: %s", source_id, err_code)
     logger.info("热文来源数: %s", len(hot_items_by_source))
+    logger.info("相对今日已生成快照的新增热文: %s", len(new_hot_items))
     return out_file
 

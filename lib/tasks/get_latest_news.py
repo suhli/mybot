@@ -85,38 +85,36 @@ def _item_key(source_id: str, item: dict[str, Any]) -> str:
     return f"{source_id}::{item_id}::{url}::{title}"
 
 
-def _collect_history_keys(ws_news_dir: Path, today: str) -> set[str]:
+def _collect_history_keys_today_before(out_dir: Path, out_file: Path) -> set[str]:
     keys: set[str] = set()
-    if not ws_news_dir.exists():
+    if not out_dir.exists():
         return keys
 
-    for date_dir in ws_news_dir.iterdir():
-        if not date_dir.is_dir():
+    for snapshot_file in out_dir.glob("*.json"):
+        # 只对比“今天目录下、且早于本次输出文件名”的快照
+        # 文件名格式: HH_MM_SS.json，按字典序即可代表时间先后
+        if snapshot_file.name >= out_file.name:
             continue
-        if date_dir.name >= today:
+        try:
+            raw = json.loads(snapshot_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
             continue
 
-        for snapshot_file in date_dir.glob("*.json"):
-            try:
-                raw = json.loads(snapshot_file.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
+        if not isinstance(raw, dict):
+            continue
+        results = raw.get("results", {})
+        if not isinstance(results, dict):
+            continue
 
-            if not isinstance(raw, dict):
+        for source_id, payload in results.items():
+            if not isinstance(source_id, str) or not isinstance(payload, dict):
                 continue
-            results = raw.get("results", {})
-            if not isinstance(results, dict):
+            items = payload.get("items", [])
+            if not isinstance(items, list):
                 continue
-
-            for source_id, payload in results.items():
-                if not isinstance(source_id, str) or not isinstance(payload, dict):
-                    continue
-                items = payload.get("items", [])
-                if not isinstance(items, list):
-                    continue
-                for item in items:
-                    if isinstance(item, dict):
-                        keys.add(_item_key(source_id, item))
+            for item in items:
+                if isinstance(item, dict):
+                    keys.add(_item_key(source_id, item))
     return keys
 
 
@@ -147,7 +145,7 @@ def run_get_latest_news() -> Path:
             if i + 1 < len(SOURCE_IDS):
                 time.sleep(FETCH_SLEEP_SEC)
 
-    history_keys = _collect_history_keys(ws_news_dir=ws_news_dir, today=today)
+    history_keys = _collect_history_keys_today_before(out_dir=out_dir, out_file=out_file)
 
     new_items: list[dict[str, Any]] = []
     new_items_by_source: dict[str, list[dict[str, Any]]] = {}
@@ -200,6 +198,6 @@ def run_get_latest_news() -> Path:
         logger.warning("以下 %s 个来源抓取失败，原因如下:", len(errors))
         for source_id, err_msg in sorted(errors.items()):
             logger.warning("  %s: %s", source_id, err_msg)
-    logger.info("相对今天之前的新增新闻: %s", len(new_items))
+    logger.info("相对今日已生成快照的新增新闻: %s", len(new_items))
     return out_file
 
