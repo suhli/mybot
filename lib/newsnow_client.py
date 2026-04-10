@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -20,13 +20,19 @@ class NewsNowClient:
 
     base_url: str = "https://newsnow.busiyi.world"
     timeout: float = 15.0
+    # slots=True 时所有实例属性必须在字段中声明，否则无法挂载 httpx.Client
+    _client: httpx.Client = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.base_url = self.base_url.rstrip("/")
-        self._client = httpx.Client(
-            base_url=self.base_url,
-            timeout=self.timeout,
-            headers={"Accept": "application/json"},
+        object.__setattr__(self, "base_url", self.base_url.rstrip("/"))
+        object.__setattr__(
+            self,
+            "_client",
+            httpx.Client(
+                base_url=self.base_url,
+                timeout=self.timeout,
+                headers={"Accept": "application/json"},
+            ),
         )
 
     def close(self) -> None:
