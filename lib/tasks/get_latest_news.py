@@ -139,9 +139,11 @@ def run_get_latest_news() -> Path:
             try:
                 all_results[source_id] = client.get_source(source_id=source_id, latest=True)
             except NewsNowError as exc:
-                errors[source_id] = str(exc)
+                logger.warning("来源 %s 抓取失败: %s", source_id, exc)
+                errors[source_id] = "fetch_failed"
             except Exception as exc:  # noqa: BLE001
-                errors[source_id] = f"Unexpected error: {exc}"
+                logger.warning("来源 %s 抓取异常: %s", source_id, exc)
+                errors[source_id] = "unexpected_error"
             if i + 1 < len(SOURCE_IDS):
                 time.sleep(FETCH_SLEEP_SEC)
 

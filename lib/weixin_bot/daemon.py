@@ -80,14 +80,17 @@ class PersonalWeixinDaemon:
         if not to_user_id:
             raise RuntimeError("to_user_id 不能为空")
         token = context_token or self.context_tokens.get(to_user_id, "")
+        if not token:
+            logger.warning("send_text: to=%s 缺少 context_token，可能导致微信侧不展示消息", to_user_id)
         client = WeixinClient(base_url=self.session.base_url, timeout=15.0)
         try:
-            client.send_text(
+            resp = client.send_text(
                 token=self.session.bot_token,
                 to_user_id=to_user_id,
                 text=text,
                 context_token=token,
             )
+            logger.info("send_text done: to=%s resp=%s", to_user_id, resp)
         finally:
             client.close()
 

@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import base64
 import random
+import uuid
 from typing import Any
 
 import httpx
 
 from .models import DEFAULT_BASE_URL
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 与 Node 版 login-qr.ts 一致：服务端长轮询约 35s；读超时需略大，否则易 httpx.ReadTimeout
 _LONG_POLL_READ_SEC = 55.0
@@ -97,15 +101,31 @@ class WeixinClient:
             return {"ret": 0, "msgs": [], "get_updates_buf": get_updates_buf}
 
     def send_text(self, token: str, to_user_id: str, text: str, context_token: str = "") -> dict[str, Any]:
-        return self._post(
+        logger.info(
+            "Sending text to %s (len=%s, has_context_token=%s)",
+            to_user_id,
+            len(text),
+            bool(context_token),
+        )
+        resp = self._post(
             "ilink/bot/sendmessage",
             {
                 "msg": {
+                    "from_user_id": "",
                     "to_user_id": to_user_id,
+                    "client_id": uuid.uuid4().hex,
+                    "message_type": 2,
+                    "message_state": 2,
                     "context_token": context_token,
                     "item_list": [{"type": 1, "text_item": {"text": text}}],
                 }
             },
             token=token,
         )
+        ret = resp.get("ret")
+        if isinstance(ret, int) and ret != 0:
+            errcode = resp.get("errcode")
+            errmsg = resp.get("errmsg")
+            raise RuntimeError(f"sendmessage failed ret={ret} errcode={errcode} errmsg={errmsg}")
+        return resp
 
