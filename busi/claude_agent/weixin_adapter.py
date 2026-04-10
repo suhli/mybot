@@ -72,6 +72,17 @@ def register_weixin_claude_handler(daemon: PersonalWeixinDaemon) -> None:
         logger.debug("Claude handler 入站 from=%s text_len=%s", from_user, len(text))
 
         with lock:
+            # Local fallback: some non-official backends may not support built-in /clear.
+            if text == "/clear":
+                if from_user in sessions:
+                    sessions.pop(from_user, None)
+                    save_agent_sessions(sessions)
+                    logger.info("已清空会话上下文 from=%s", from_user)
+                    daemon.send_text(from_user, "已清空当前会话上下文。", context_token=context_token)
+                else:
+                    daemon.send_text(from_user, "当前没有可清空的会话上下文。", context_token=context_token)
+                return
+
             resume_id = sessions.get(from_user)
             logger.debug("Claude resume_session_id=%s", resume_id or "(none)")
             try:

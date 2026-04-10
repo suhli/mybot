@@ -131,6 +131,10 @@ async def _chat_turn_async(
                     msg.errors,
                 )
                 out_session_id = msg.session_id or out_session_id
+                # Some backends may return meaningful `result` text with is_error=False
+                # (e.g. "Unknown skill: xxx"). Keep it as a readable fallback.
+                if msg.result:
+                    reply_parts.append(str(msg.result))
                 if msg.is_error:
                     err_bits: list[str] = []
                     if msg.result:
