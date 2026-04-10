@@ -5,6 +5,17 @@ from typing import Any
 
 import httpx
 
+DEFAULT_HEADERS: dict[str, str] = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Connection": "keep-alive",
+    "Cache-Control": "no-cache",
+}
+
 
 class NewsNowError(Exception):
     """Base exception for NewsNow client errors."""
@@ -12,6 +23,24 @@ class NewsNowError(Exception):
 
 class NewsNowHTTPError(NewsNowError):
     """Raised when NewsNow returns non-2xx responses."""
+
+
+def _summarize_http_error_body(response: httpx.Response, max_plain_len: int = 280) -> str:
+    """避免把网关/HTML 整页塞进异常信息（日志里会像乱码 HTML）。"""
+    text = response.text or ""
+    ctype = (response.headers.get("content-type") or "").lower()
+    snippet = text.strip()[:800].lower()
+    looks_html = (
+        "text/html" in ctype
+        or snippet.startswith("<!doctype")
+        or snippet.startswith("<html")
+        or ("<head" in snippet and "<body" in snippet)
+    )
+    if looks_html:
+        return f"<HTML 响应体已省略，约 {len(text)} 字节>"
+    if len(text) > max_plain_len:
+        return text[:max_plain_len].replace("\n", " ") + "…"
+    return text.replace("\n", " ").strip() or "(空响应体)"
 
 
 @dataclass(slots=True)
@@ -31,7 +60,7 @@ class NewsNowClient:
             httpx.Client(
                 base_url=self.base_url,
                 timeout=self.timeout,
-                headers={"Accept": "application/json"},
+                headers=DEFAULT_HEADERS,
             ),
         )
 
@@ -99,8 +128,9 @@ class NewsNowClient:
             raise NewsNowError(f"Request failed: {exc}") from exc
 
         if response.status_code >= 400:
+            detail = _summarize_http_error_body(response)
             raise NewsNowHTTPError(
-                f"HTTP {response.status_code} for {method} {path}: {response.text}"
+                f"HTTP {response.status_code} for {method} {path}: {detail}"
             )
 
         try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -7,6 +8,8 @@ from typing import Callable
 
 
 TaskFunc = Callable[[], None]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -73,7 +76,7 @@ class TaskScheduler:
                 try:
                     task.func()
                 except Exception as exc:  # noqa: BLE001
-                    print(f"[TaskScheduler][{task.name}] 执行失败: {exc}")
+                    logger.exception("任务 %s 执行失败", task.name)
                 finally:
                     task.next_run_ts = now + task.interval_seconds
 

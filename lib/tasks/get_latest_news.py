@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from lib.newsnow_client import NewsNowClient, NewsNowError
+
+logger = logging.getLogger(__name__)
+
+# 连续请求间隔（秒），减轻限流/HTML 拦截
+FETCH_SLEEP_SEC = 0.8
 
 SOURCE_IDS: list[str] = [
     "zhihu",
@@ -132,15 +139,17 @@ def run_get_latest_news() -> Path:
     all_results: dict[str, Any] = {}
     errors: dict[str, str] = {}
 
-    print(f"[get_latest_news] 开始抓取，共 {len(SOURCE_IDS)} 个来源...")
+    logger.info("开始抓取，共 %s 个来源...", len(SOURCE_IDS))
     with NewsNowClient() as client:
-        for source_id in SOURCE_IDS:
+        for i, source_id in enumerate(SOURCE_IDS):
             try:
                 all_results[source_id] = client.get_source(source_id=source_id, latest=True)
             except NewsNowError as exc:
                 errors[source_id] = str(exc)
             except Exception as exc:  # noqa: BLE001
                 errors[source_id] = f"Unexpected error: {exc}"
+            if i + 1 < len(SOURCE_IDS):
+                time.sleep(FETCH_SLEEP_SEC)
 
     history_keys = _collect_history_keys(ws_news_dir=ws_news_dir, today=today)
 
@@ -189,8 +198,12 @@ def run_get_latest_news() -> Path:
     }
     out_file.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"[get_latest_news] 已保存快照: {out_file}")
-    print(f"[get_latest_news] 成功: {len(all_results)} | 失败: {len(errors)}")
-    print(f"[get_latest_news] 相对今天之前的新增新闻: {len(new_items)}")
+    logger.info("已保存快照: %s", out_file)
+    logger.info("成功: %s | 失败: %s", len(all_results), len(errors))
+    if errors:
+        logger.warning("以下 %s 个来源抓取失败，原因如下:", len(errors))
+        for source_id, err_msg in sorted(errors.items()):
+            logger.warning("  %s: %s", source_id, err_msg)
+    logger.info("相对今天之前的新增新闻: %s", len(new_items))
     return out_file
 

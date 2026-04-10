@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from pathlib import Path
@@ -8,6 +9,8 @@ from typing import Any
 from lib.claude.agent import ClaudeAgentRunConfig, format_reply_chunks, run_agent_reply_sync
 from lib.claude.sessions import load_agent_sessions, save_agent_sessions
 from lib.weixin_bot.daemon import PersonalWeixinDaemon
+
+logger = logging.getLogger(__name__)
 
 
 def _env_truthy(name: str) -> bool:
@@ -50,10 +53,12 @@ def register_weixin_claude_handler(daemon: PersonalWeixinDaemon) -> None:
     需设置环境变量 WEIXIN_CLAUDE_ENABLED=1 才会生效。
     """
     if not _env_truthy("WEIXIN_CLAUDE_ENABLED"):
+        logger.debug("WEIXIN_CLAUDE_ENABLED 未开启，跳过注册 Claude handler")
         return
 
     lock = threading.Lock()
     sessions: dict[str, str] = load_agent_sessions()
+    logger.info("已注册微信 Claude handler（DEBUG 可查看 SDK 流式中间输出）")
 
     def handler(event: dict[str, Any]) -> None:
         from_user = str(event.get("from_user_id", "") or "")
@@ -63,12 +68,15 @@ def register_weixin_claude_handler(daemon: PersonalWeixinDaemon) -> None:
         if not from_user or not text:
             return
         if daemon.session.user_id and from_user == str(daemon.session.user_id):
+            logger.debug("忽略本人消息 from=%s", from_user)
             return
 
         cfg = weixin_claude_run_config()
+        logger.debug("Claude handler 入站 from=%s text_len=%s", from_user, len(text))
 
         with lock:
             resume_id = sessions.get(from_user)
+            logger.debug("Claude resume_session_id=%s", resume_id or "(none)")
             try:
                 reply, new_session_id = run_agent_reply_sync(
                     text,
@@ -78,7 +86,7 @@ def register_weixin_claude_handler(daemon: PersonalWeixinDaemon) -> None:
                     session_slot_prefix="wx",
                 )
             except Exception as exc:  # noqa: BLE001
-                print(f"[WARN] Claude Agent 调用失败: {exc}")
+                logger.warning("Claude Agent 调用失败: %s", exc)
                 daemon.send_text(
                     from_user,
                     f"[Claude] 调用失败: {exc}",
@@ -90,7 +98,21 @@ def register_weixin_claude_handler(daemon: PersonalWeixinDaemon) -> None:
                 sessions[from_user] = new_session_id
                 save_agent_sessions(sessions)
 
-        for chunk in format_reply_chunks(reply, config=cfg):
+        logger.debug(
+            "Claude 回合结束 reply_len=%s new_session_id=%s",
+            len(reply),
+            new_session_id,
+        )
+        chunks = format_reply_chunks(reply, config=cfg)
+        logger.debug("Claude 回复拆分为 %s 条微信分片", len(chunks))
+        for i, chunk in enumerate(chunks):
+            logger.debug(
+                "Claude 发送分片 %s/%s len=%s preview=%s",
+                i + 1,
+                len(chunks),
+                len(chunk),
+                chunk[:120].replace("\n", " ") + ("…" if len(chunk) > 120 else ""),
+            )
             daemon.send_text(from_user, chunk, context_token=context_token)
 
     daemon.add_message_handler(handler)

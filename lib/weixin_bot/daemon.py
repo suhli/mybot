@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -9,6 +10,8 @@ from .client import WeixinClient
 from .models import DEFAULT_BASE_URL, DEFAULT_BOT_TYPE, Session
 from .qr import print_qr_to_console
 from .storage import load_context_tokens, load_session, save_context_tokens, save_session
+
+logger = logging.getLogger(__name__)
 
 
 class PersonalWeixinDaemon:
@@ -33,9 +36,9 @@ class PersonalWeixinDaemon:
             qrcode_url = str(qr.get("qrcode_img_content", "") or "")
             if not qrcode or not qrcode_url:
                 raise RuntimeError("获取二维码失败")
-            print("请使用微信扫码登录（控制台二维码如下）:")
+            logger.info("请使用微信扫码登录（控制台二维码如下）:")
             print_qr_to_console(qrcode_url)
-            print(f"若二维码显示异常，请打开: {qrcode_url}")
+            logger.info("若二维码显示异常，请打开: %s", qrcode_url)
             deadline = time.time() + 480
             while time.time() < deadline:
                 status = client.get_qrcode_status(qrcode=qrcode)
@@ -52,10 +55,10 @@ class PersonalWeixinDaemon:
                         base_url=str(status.get("baseurl") or DEFAULT_BASE_URL),
                     )
                     save_session(session)
-                    print(f"登录成功，bot_id={session.bot_id}")
+                    logger.info("登录成功，bot_id=%s", session.bot_id)
                     return session
                 if s == "scaned":
-                    print("已扫码，请在手机确认...")
+                    logger.info("已扫码，请在手机确认...")
                 elif s == "expired":
                     raise RuntimeError("二维码已过期，请重启进程重新登录")
                 time.sleep(1.0)
@@ -97,7 +100,7 @@ class PersonalWeixinDaemon:
                     get_updates_buf=self.session.get_updates_buf,
                 )
             except Exception as exc:
-                print(f"[WARN] 拉取消息失败: {exc}")
+                logger.warning("拉取消息失败: %s", exc)
                 time.sleep(1.5)
                 continue
             finally:
@@ -112,7 +115,7 @@ class PersonalWeixinDaemon:
                 if from_user and context_token:
                     self.context_tokens[from_user] = context_token
                     save_context_tokens(self.context_tokens)
-                print(f"[INBOUND] from={from_user} text={text}")
+                logger.info("INBOUND from=%s text=%s", from_user, text)
                 event = {
                     "from_user_id": from_user,
                     "text": text,
@@ -123,7 +126,7 @@ class PersonalWeixinDaemon:
                     try:
                         handler(event)
                     except Exception as exc:
-                        print(f"[WARN] handler 执行失败: {exc}")
+                        logger.exception("handler 执行失败")
 
             time.sleep(0.2)
 
@@ -138,14 +141,14 @@ class PersonalWeixinDaemon:
             self.poll_thread.join(timeout=2.0)
 
     def run_forever(self) -> None:
-        print("常驻服务启动成功（单账号）。")
-        print("可在同一进程内注册 handler，并在 handler 或定时任务中调用 send_text。")
+        logger.info("常驻服务启动成功（单账号）。")
+        logger.info("可在同一进程内注册 handler，并在 handler 或定时任务中调用 send_text。")
         self.start()
         try:
             while True:
                 time.sleep(1.0)
         except KeyboardInterrupt:
-            print("收到退出信号，正在停止...")
+            logger.info("收到退出信号，正在停止...")
         finally:
             self.stop()
 

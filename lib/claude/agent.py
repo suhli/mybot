@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from claude_agent_sdk import (
     ResultMessage,
     TextBlock,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def repository_root() -> Path:
@@ -101,13 +104,32 @@ async def _chat_turn_async(
     out_session_id: str | None = None
 
     async with ClaudeSDKClient(options) as client:
+        logger.debug("Claude SDK query: %s", user_text)
         await client.query(user_text, session_id=sdk_session_slot)
         async for msg in client.receive_response():
             if isinstance(msg, AssistantMessage):
+                logger.debug(
+                    "Claude SDK AssistantMessage blocks=%s",
+                    len(msg.content),
+                )
                 for block in msg.content:
                     if isinstance(block, TextBlock):
+                        logger.debug("Claude assistant TextBlock: %s", block.text)
                         reply_parts.append(block.text)
+                    else:
+                        logger.debug(
+                            "Claude assistant non-text block: %s %r",
+                            type(block).__name__,
+                            block,
+                        )
             elif isinstance(msg, ResultMessage):
+                logger.debug(
+                    "Claude SDK ResultMessage is_error=%s session_id=%s result=%r errors=%r",
+                    msg.is_error,
+                    msg.session_id,
+                    msg.result,
+                    msg.errors,
+                )
                 out_session_id = msg.session_id or out_session_id
                 if msg.is_error:
                     err_bits: list[str] = []
@@ -118,6 +140,12 @@ async def _chat_turn_async(
                     if err_bits:
                         reply_parts.append("[Claude 错误] " + " | ".join(err_bits))
                 break
+            else:
+                logger.debug(
+                    "Claude SDK message %s: %r",
+                    type(msg).__name__,
+                    msg,
+                )
 
     reply = "\n".join(p for p in reply_parts if p).strip()
     if not reply:
