@@ -1,3 +1,11 @@
+---
+name: newsnow-latest-summary
+description: >-
+  执行 `run_get_latest_news`，在 `ws/news` 下定位最新快照 JSON，并输出简明中文摘要（生成时间、成功/失败数、
+  `new_count_vs_before_today`、按来源的新增标题与链接、失败来源 ID）。
+  在用户要 NewsNow 快照摘要、本轮抓取简报、或基于仓库已抓取新闻的快速文字汇总时使用。
+---
+
 # NewsNow 最新摘要
 
 ## 目的
