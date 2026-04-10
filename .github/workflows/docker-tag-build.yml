@@ -30,4 +30,4 @@ jobs:
           context: .
           push: true
           tags: |
-            ccr.ccs.tencentyun.com/mybot:${{ github.ref_name }}
+            ccr.ccs.tencentyun.com/suhli/mybot:${{ github.ref_name }}
