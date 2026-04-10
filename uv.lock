@@ -703,6 +703,7 @@ source = { editable = "." }
 dependencies = [
     { name = "claude-agent-sdk" },
     { name = "httpx" },
+    { name = "python-dotenv" },
     { name = "qrcode" },
 ]
 
@@ -710,5 +711,6 @@ dependencies = [
 requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.1.58" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "qrcode", specifier = ">=8.2" },
 ]

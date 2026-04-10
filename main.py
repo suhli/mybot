@@ -26,7 +26,7 @@ def main() -> None:
         name="get_latest_news",
         func=run_get_latest_news,
         interval_seconds=60 * 30,
-        run_on_start=True,
+        run_on_start=False,
     )
     scheduler.start()
 
