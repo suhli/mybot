@@ -33,10 +33,10 @@ def main() -> None:
         interval_seconds=60 * 30,
         run_on_start=False,
     )
-    scheduler.register_interval_task(
+    scheduler.register_daily_task(
         name="get_hot_news_push",
         func=build_hot_news_push_task(daemon),
-        interval_seconds=60 * 30,
+        times=((7, 50, 0), (12, 30, 0), (18, 30, 0), (21, 30, 0)),
         run_on_start=False,
     )
     scheduler.start()
