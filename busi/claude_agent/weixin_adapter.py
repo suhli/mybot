@@ -67,9 +67,6 @@ def register_weixin_claude_handler(daemon: PersonalWeixinDaemon) -> None:
 
         if not from_user or not text:
             return
-        if daemon.session.user_id and from_user == str(daemon.session.user_id):
-            logger.debug("忽略本人消息 from=%s", from_user)
-            return
 
         cfg = weixin_claude_run_config()
         logger.debug("Claude handler 入站 from=%s text_len=%s", from_user, len(text))
