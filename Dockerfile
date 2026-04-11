@@ -18,6 +18,10 @@ COPY pyproject.toml uv.lock ./
 # Create virtual environment and sync dependencies
 RUN uv venv && uv sync --frozen
 
+# Bash 等子进程里的 `python` 须指向项目 venv（否则缺 httpx 等依赖）
+ENV PATH="/app/.venv/bin:${PATH}" \
+    VIRTUAL_ENV="/app/.venv"
+
 # Copy project files
 COPY . .
 
