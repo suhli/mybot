@@ -21,5 +21,11 @@ RUN uv venv && uv sync --frozen
 # Copy project files
 COPY . .
 
+# Claude Code CLI 禁止在 root 下使用 bypassPermissions（--dangerously-skip-permissions）
+RUN useradd --create-home --uid 1000 --user-group mybot \
+    && chown -R mybot:mybot /app
+
+USER mybot
+
 # Run the main entrypoint
 CMD [".venv/bin/python", "main.py"]
