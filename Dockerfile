@@ -31,5 +31,5 @@ RUN useradd --create-home --uid 1000 --user-group mybot \
 
 USER mybot
 
-# Run the main entrypoint
-CMD [".venv/bin/python", "main.py"]
+# 先激活 venv 再跑（与直接 .venv/bin/python 等价；exec 使 PID 1 为 python）
+CMD ["/bin/sh", "-c", ". .venv/bin/activate && exec python main.py"]
