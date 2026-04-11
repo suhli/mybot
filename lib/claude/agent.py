@@ -98,6 +98,8 @@ async def _chat_turn_async(
         model=config.model,
         cwd=_effective_cwd(config),
         cli_path=config.cli_path,
+        # 默认不加载文件系统配置；未设置则不会发现 .claude/skills（见 Agent SDK 文档 setting_sources）
+        setting_sources=["user", "project"],
     )
 
     reply_parts: list[str] = []
