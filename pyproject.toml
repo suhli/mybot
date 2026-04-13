@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "python-dotenv>=1.2.2",
     "qrcode>=8.2",
+    "tzdata>=2025.1",
 ]
 
 [project.scripts]

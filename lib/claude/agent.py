@@ -133,10 +133,12 @@ async def _chat_turn_async(
                     msg.errors,
                 )
                 out_session_id = msg.session_id or out_session_id
-                # Some backends may return meaningful `result` text with is_error=False
-                # (e.g. "Unknown skill: xxx"). Keep it as a readable fallback.
-                if msg.result:
-                    reply_parts.append(str(msg.result))
+                # 多数后端会把最终回复再放进 `result`，与 AssistantMessage 正文重复；
+                # 仅在「本轮没有任何 assistant 文本」时把 result 当作兜底（如仅返回一行说明）。
+                if msg.result and not msg.is_error:
+                    result_str = str(msg.result).strip()
+                    if result_str and not reply_parts:
+                        reply_parts.append(result_str)
                 if msg.is_error:
                     err_bits: list[str] = []
                     if msg.result:

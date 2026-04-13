@@ -25,15 +25,20 @@ def _resolve_push_target_user(daemon: PersonalWeixinDaemon) -> str:
 
 
 def _build_json_analyze_prompt(snapshot_path: Path) -> str:
-    # 通过明确指令触发 `newsnow-json-analyze` skill
+    """要的是读者向热文汇总（标题+链接+短评），不是对 JSON/任务的元数据分析简报。"""
     return (
-        "请使用 `.claude/skills/newsnow-json-analyze/SKILL.md` 的规则，"
-        "仅分析我提供的这个 JSON 文件，不要执行任何抓取任务。\n\n"
+        "请阅读下列热文快照 JSON，不要执行任何抓取、不要改写文件。"
+        "字段含义与结构可参考 `.claude/skills/newsnow-json-analyze/SKILL.md`，"
+        "但输出必须是「给微信好友看的新闻汇总」，禁止写成对任务的简报或数据分析报告。\n\n"
         f"JSON 文件路径: {snapshot_path.as_posix()}\n\n"
-        "请输出：\n"
-        "1) 文件类型判断与关键指标\n"
-        "2) 标题分类统计\n"
-        "3) 简短分析结论（主题/来源集中度/异常说明）"
+        "用中文输出，格式与内容要求：\n"
+        "- 开头一行：快照生成时间；若有 `new_hot_count_vs_today_before`，写明本轮相对今日已落盘快照的新增热文条数。\n"
+        "- 正文：按来源分段；优先写 `new_hot_items` / `new_hot_items_by_source` 里的新增，"
+        "不足再补 `hot_items_by_source`。每条一行或一小段：清晰标题 + 完整可点击 URL。\n"
+        "- 结尾 2～4 句：概括今天热点在聊什么（主题/方向即可），像编辑导语，不要提「JSON」「文件类型」「结构」。\n"
+        "- 禁止输出「文件类型判断」「标题分类统计表」「核心指标」等大段元信息；"
+        "成功/失败数若存在，最多用一行带过；有失败来源时文末列出对应来源 ID 即可。\n"
+        "- 语气紧凑、可直接复制发送，避免空话套话。"
     )
 
 
@@ -41,8 +46,8 @@ def build_hot_news_push_task(daemon: PersonalWeixinDaemon) -> Callable[[], None]
     """
     定时任务入口：
     1) 抓取热文快照
-    2) 若存在 `new_hot_count_vs_today_before` 增量，调用 Claude 分析该 JSON
-    3) 将分析结果发到微信
+    2) 若存在 `new_hot_count_vs_today_before` 增量，调用 Claude 根据该 JSON 生成热文汇总
+    3) 将汇总文本发到微信
     """
     sessions = load_agent_sessions()
 
@@ -62,7 +67,7 @@ def build_hot_news_push_task(daemon: PersonalWeixinDaemon) -> Callable[[], None]
         if not isinstance(new_count, int):
             new_count = 0
         if new_count <= 0:
-            logger.info("热文无新增，跳过 Claude 分析与微信推送")
+            logger.info("热文无新增，跳过 Claude 汇总与微信推送")
             return
 
         target_user = _resolve_push_target_user(daemon)
@@ -76,7 +81,7 @@ def build_hot_news_push_task(daemon: PersonalWeixinDaemon) -> Callable[[], None]
         prompt = _build_json_analyze_prompt(snapshot_path)
         resume_id = sessions.get(_HOT_PUSH_SESSION_KEY)
         logger.info(
-            "热文新增 %s 条，开始 Claude 分析并推送，target=%s path=%s",
+            "热文新增 %s 条，开始 Claude 汇总并推送，target=%s path=%s",
             new_count,
             target_user,
             snapshot_path,
@@ -90,7 +95,7 @@ def build_hot_news_push_task(daemon: PersonalWeixinDaemon) -> Callable[[], None]
                 session_slot_prefix="wx_hotnews",
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Claude 热文分析失败: %s", exc)
+            logger.warning("Claude 热文汇总失败: %s", exc)
             return
 
         if new_session_id:
@@ -98,7 +103,7 @@ def build_hot_news_push_task(daemon: PersonalWeixinDaemon) -> Callable[[], None]
             save_agent_sessions(sessions)
 
         chunks = format_reply_chunks(reply, config=cfg)
-        logger.info("Claude 热文分析完成，分片=%s", len(chunks))
+        logger.info("Claude 热文汇总完成，分片=%s", len(chunks))
         for chunk in chunks:
             daemon.send_text(target_user, chunk)
 

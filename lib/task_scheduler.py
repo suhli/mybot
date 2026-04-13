@@ -1,16 +1,30 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import Callable, Sequence
+from zoneinfo import ZoneInfo
 
 
 TaskFunc = Callable[[], None]
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=8)
+def _zone_for_name(name: str) -> ZoneInfo:
+    return ZoneInfo(name)
+
+
+def _daily_task_zone() -> ZoneInfo:
+    """每日任务时刻按此时区解释（容器默认 UTC 会导致与北京时间差 8 小时）。"""
+    raw = (os.environ.get("MYBOT_SCHEDULER_TZ") or os.environ.get("TZ") or "Asia/Shanghai").strip()
+    return _zone_for_name(raw if raw else "Asia/Shanghai")
 
 
 @dataclass(slots=True)
@@ -140,7 +154,8 @@ class TaskScheduler:
 
     @staticmethod
     def _next_daily_run_ts(hour: int, minute: int, second: int, now_ts: float) -> float:
-        now_dt = datetime.fromtimestamp(now_ts)
+        tz = _daily_task_zone()
+        now_dt = datetime.fromtimestamp(now_ts, tz=tz)
         next_dt = now_dt.replace(hour=hour, minute=minute, second=second, microsecond=0)
         if next_dt <= now_dt:
             next_dt += timedelta(days=1)
